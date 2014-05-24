@@ -1,9 +1,14 @@
+
 #########################################
 ## Function to calculate the column means for a given set
 #########################################
 
 calculateColumnMean <- function (the_set,groups) {
-    res <- colMeans(the_set[,-groups],na.rm=TRUE)
+    
+    numeric_columns <- names(the_set) %in% groups
+    
+    
+    res <- colMeans(the_set[,!numeric_columns],na.rm=TRUE)
     res <- cbind(unique(the_set[,groups]),t(res))
     res
 }
@@ -61,6 +66,15 @@ features_column_names$cleaned_column_names <-
 ################
 activity_labels <- read.table("UCI HAR Dataset\\activity_labels.txt")
 
+
+#########################################
+## Merge x_train and x_test, y_train and y_test,subject_train and subject_test
+#########################################
+x <- rbind(x_train,x_test)
+y <- rbind(y_train,y_test)
+subject <- rbind(subject_train,subject_test)
+
+
 #########################################
 ## Rename columns in data extracts
 #########################################
@@ -68,51 +82,40 @@ activity_labels <- read.table("UCI HAR Dataset\\activity_labels.txt")
 ## activity_labels, Activity code to description mapping
 names(activity_labels) <- c("Activity Code","Activity Description")
 
-## y_test, y_train = activity code, i.e. code for walking, sitting etc.
-names(y_test) <- c("Activity Code")
-names(y_train) <- c("Activity Code")
+## y = activity code, i.e. code for walking, sitting etc.
+names(y) <- c("Activity Code")
 
-## subject_test, subject_train = subject number, i.e. person performing the test
-names(subject_test) = c("Subject Number")
-names(subject_train) = c("Subject Number")
+## subject = subject number, i.e. person performing the test
+names(subject) = c("Subject Number")
 
-## x_test, x_train
-names(x_test) <- features_column_names$cleaned_column_names
-names(x_train) <- features_column_names$cleaned_column_names    
+## x = features
+names(x)<- features_column_names$cleaned_column_names
 
 
 #########################################
-## Filter x_test and x_train to only include measurement about mean and 
+## Filter x to only include measurement about mean and 
 ## standard deviation(std)
 ## Searching for the term "mean" include "meanFreq" as well. meanFreq is 
 ## calculated as the average frequency which can be understood as mean as well.
 ## Hence they have been included.
 #########################################
-feature_test <- subset(x_test,select=grepl("mean|std",colnames(x_test)))
-feature_train <- subset(x_train,select=grepl("mean|std",colnames(x_train)))
-
-#########################################
-## merge y_test and y_train with activity label
-## already done checking that unique activity code in y_test and y_train are
-## 1,2,3,4,5,6 which activity labels can cover.
-#########################################
-y_test <- merge(y_test,activity_labels,by=c("Activity Code"),all=FALSE)
-y_train <- merge(y_train,activity_labels,by=c("Activity Code"),all=FALSE)
-
-# clean the description to get rid of the _. Replace with space
-y_test$"Activity Description" <- gsub("_"," ",y_test$"Activity Description")
-y_train$"Activity Description" <- gsub("_"," ",y_train$"Activity Description")
+features <- subset(x,select=grepl("mean|std",colnames(x)))
 
 #########################################
 ## Stick subject and activity code to the feature lists
 #########################################
-feature_test <- cbind(subject_test,y_test,feature_test)
-feature_train <- cbind(subject_train,y_train,feature_train)
+features <- cbind(subject,y,features)
+
 
 #########################################
-## combine the extracts into one dataset
+## merge features with activity label
+## already done checking that unique activity code are
+## 1,2,3,4,5,6 which activity labels can cover.
 #########################################
-features <- rbind(feature_test,feature_train)
+features <- merge(features,activity_labels,by=c("Activity Code"),all=FALSE,sort=FALSE)
+
+# clean the description to get rid of the _. Replace with space
+features$"Activity Description" <- gsub("_"," ",features$"Activity Description")
 
 
 #########################################
@@ -125,17 +128,17 @@ features <- rbind(feature_test,feature_train)
 #write.csv(test,file="test.csv")
 
 result <-do.call(rbind,
-    by( features[,-c(2)] # take every column except activity code 
-    ,features[,c(1,3)] # group by subject number and activity code
+    by( features[,!names(features) %in% "Activity Code"] 
+        # take every column except activity code 
+    ,features[,c("Subject Number","Activity Description")] 
+        # group by subject number and activity
     ,calculateColumnMean
-        ,groups=c(1,2)
+        ,groups=c("Subject Number","Activity Description")
    )
 )
-
 
 #########################################
 ## create a text file from the averaging result
 #########################################
-write.table(result,file="cleaned_average.txt",sep="\t",row.names=FALSE)
-
+write.table(result,file="CleanedMean.txt",sep="\t",row.names=FALSE)
 
